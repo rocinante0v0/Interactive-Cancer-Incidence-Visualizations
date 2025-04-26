@@ -25,6 +25,11 @@ https://rocinante0v0.github.io/Interactive-Cancer-Incidence-Visualizations/555-3
 - `leaflet` for choropleth map
 - `dplyr`, `sf`, `htmltools`, and `tmap` for data wrangling and visualization
 
+## Real-World Impact
+
+This dashboard helps identify Georgia counties with unusually high colorectal cancer incidence rates, guiding targeted public health action.  
+It provides a visual tool to support resource allocation, community outreach, and the investigation of geographic health disparities.
+
 ## Author
 
 Ziqi Ai  
