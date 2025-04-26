@@ -23,11 +23,15 @@ library(htmlwidgets)
 
 <div style="font-size:18px;">
 
-This dashboard uses data from the publicly available SEER colorectal cancer dataset, provided by the National Cancer Institute.  
-Data were collected from hospital records and state cancer registries covering individuals aged 18 to 50 residing in Georgia.  
-The dataset includes case counts and population data aggregated by county and race group.  
-The analysis focuses on the time period from 2000 to 2010.  
-County-level incidence rates were calculated using standardized population counts and matched to geographic shapefiles for visualization.
+This dataset is sourced from the SEER colorectal cancer database.  https://seer.cancer.gov/data/
+
+The dataset includes 5253 colorectal cancer cases diagnosed in Georgia.
+
+Data were collected through hospital reports and state cancer registries following standardized reporting guidelines.  
+
+The study population comprises young adult males and females across all racial groups residing in Georgia aged 18-50.  
+
+The cases span the time period from January 1, 2000, to December 31, 2010.
 
 </div>
 
