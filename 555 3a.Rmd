@@ -1,0 +1,220 @@
+---
+title: "Interactive Cancer Incidence Visualizations"
+output: html_document
+---
+
+## Dataset Description
+
+This dashboard uses data from the publicly available SEER colorectal cancer dataset, provided by the National Cancer Institute.  
+Data were collected from hospital records and state cancer registries covering individuals aged 18 to 50 residing in Georgia.  
+The dataset includes case counts and population data aggregated by county and race group.  
+The analysis focuses on the time period from 2000 to 2010.  
+County-level incidence rates were calculated using standardized population counts and matched to geographic shapefiles for visualization.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Widget 1: Interactive Scatter Plot
+
+This scatter plot shows the relationship between **population size** and **cancer incidence rate** in Georgia counties. You can hover over points to see detailed data, and use zoom/pan features for exploration.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(plotly)
+
+# ==== Step 1: Load and aggregate incidence data ====
+
+data_file <- "E:/Project/Data/processed_filtered_male_2000.txt"
+if (!file.exists(data_file)) stop("Data file not found.")
+
+incidence_raw <- read.table(data_file, header = TRUE, sep = "\t",
+                            stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+
+# Clean population column
+incidence_raw$Population <- as.numeric(gsub(",", "", incidence_raw$Population))
+
+# Remove invalid population rows
+incidence_raw <- incidence_raw[!is.na(incidence_raw$Population) & incidence_raw$Population > 0, ]
+
+# Group by county, aggregate count and population
+incidence_data <- incidence_raw %>%
+  group_by(GEOID, county_name) %>%
+  summarise(
+    Total_Pop = sum(Population),
+    Total_Count = sum(Count),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    Incidence_Rate = (Total_Count / Total_Pop) * 100000
+  )
+
+# Ensure numeric field for x-axis
+incidence_data$Total_Pop <- as.numeric(incidence_data$Total_Pop)
+
+# ==== Step 2: Create interactive plotly scatter plot ====
+
+p1 <- plot_ly(
+  incidence_data, 
+  x = ~Total_Pop, 
+  y = ~Incidence_Rate, 
+  text = ~paste0(
+    "County: ", county_name, "<br>",
+    "Population: ", formatC(Total_Pop, format = "d", big.mark = ","), "<br>",
+    "Incidence Rate: ", sprintf("%.2f", Incidence_Rate), " per 100K"
+  ),
+  type = 'scatter', 
+  mode = 'markers',
+  marker = list(size = 10, color = 'blue'),
+  hoverinfo = "text",
+  width = NULL,
+  height = NULL
+) %>%
+  layout(
+    autosize = TRUE,
+    title = list(
+      text = "Incidence Rate vs Population",
+      y = 0.95
+    ),
+    margin = list(t = 100),
+    xaxis = list(title = "Total Population"),
+    yaxis = list(title = "Incidence Rate per 100,000")
+  ) %>%
+  config(responsive = TRUE)
+
+p1
+
+```
+
+### Key Takeaways:
+- The majority of counties have populations under 500,000 and incidence rates between 5 and 20 per 100,000.
+- Larger counties show less variability in incidence rates, clustering around consistent values.
+- Counties with smaller populations tend to have greater variation, including outliers with very high rates, possibly due to data instability in low-population areas.
+
+---
+
+## Widget 2: Interactive Incidence Map
+
+This map visualizes **colorectal cancer incidence rates** across **Georgia counties**. The color intensity represents the rate per 100,000 people. You can hover over each county for more details.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(sf)
+library(leaflet)
+library(dplyr)
+library(htmltools)
+
+# ==== Step 1: Load and aggregate incidence data ====
+
+data_file <- "E:/Project/Data/processed_filtered_male_2000.txt"
+if (!file.exists(data_file)) stop("Data file not found.")
+
+incidence_raw <- read.table(data_file, header = TRUE, sep = "\t",
+                            stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+
+# Clean population column
+incidence_raw$Population <- as.numeric(gsub(",", "", incidence_raw$Population))
+
+# Remove invalid population rows
+incidence_raw <- incidence_raw[!is.na(incidence_raw$Population) & incidence_raw$Population > 0, ]
+
+# Group by county, aggregate count and population
+incidence_data <- incidence_raw %>%
+  group_by(GEOID, county_name) %>%
+  summarise(
+    Total_Pop = sum(Population),
+    Total_Count = sum(Count),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    Incidence_Rate = (Total_Count / Total_Pop) * 100000
+  )
+
+# Ensure GEOID is character
+incidence_data$GEOID <- as.character(incidence_data$GEOID)
+
+# ==== Step 2: Load and merge shapefile ====
+
+shp_file <- "E:/Project/Data/tl_2010_13_county10.shp"
+if (!file.exists(shp_file)) stop("Shapefile not found.")
+
+georgia_counties <- st_read(shp_file)
+georgia_counties$GEOID10 <- as.character(georgia_counties$GEOID10)
+
+# Merge shapefile and processed incidence data
+g_map_data <- left_join(georgia_counties, incidence_data, by = c("GEOID10" = "GEOID"))
+
+# Remove counties without incidence data
+g_map_data <- g_map_data[!is.na(g_map_data$Incidence_Rate), ]
+
+# ==== Step 3: Define hover tooltip and color scale ====
+
+labels <- sprintf(
+  "<strong>County:</strong> %s<br/>
+   <strong>Total Population:</strong> %s<br/>
+   <strong>Incidence Rate:</strong> %.2f per 100K",
+  g_map_data$county_name,
+  formatC(g_map_data$Total_Pop, format = "d", big.mark = ","),
+  g_map_data$Incidence_Rate
+) %>% lapply(htmltools::HTML)
+
+pal <- colorNumeric("Blues", domain = g_map_data$Incidence_Rate, na.color = "transparent")
+
+# ==== Step 4: Draw interactive leaflet map ====
+
+leaflet(g_map_data, options = leafletOptions(zoomControlPosition = "bottomleft")) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(
+    fillColor = ~pal(Incidence_Rate),
+    weight = 1,
+    opacity = 1,
+    color = "white",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlight = highlightOptions(
+      weight = 3,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE
+    ),
+    label = labels,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "13px",
+      direction = "auto"
+    )
+  ) %>%
+  addLegend(
+    pal = pal,
+    values = ~Incidence_Rate,
+    opacity = 0.7,
+    title = "Incidence Rate<br>(per 100,000)",
+    position = "bottomright"
+  ) %>%
+  addControl(
+    html = "<div style='font-size:10px;'><strong>Colorectal Cancer Incidence in Georgia</strong></div>",
+    position = "topright"
+  )
+```
+
+### Key Takeaways:
+- Colorectal cancer incidence is not evenly distributed across Georgia’s counties.
+- Several counties in central and southwestern Georgia display noticeably higher incidence rates.
+- The spatial distribution suggests that localized factors may influence colorectal cancer risk and deserve further investigation.
+
+---
+
+## Source Code
+The full source code is embedded in this document and available for review. The visualizations are generated using **plotly** and **tmap**, ensuring interactivity and usability.
+
+<p style="font-size:16px">
+🔗 View project source code on <a href="https://github.com/rocinante0v0/Interactive-Cancer-Incidence-Visualizations" target="_blank">GitHub</a>
+</p>
+
+## Real-World Impact
+
+This dashboard helps identify Georgia counties with unusually high colorectal cancer incidence rates, guiding targeted public health action.  
+It provides a visual tool to support resource allocation, community outreach, and the investigation of geographic health disparities.
+
+
+**End of Report.**
